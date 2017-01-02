@@ -1,0 +1,55 @@
+name: Daily_Batch
+version: 1
+execute: "rate(1 day)"
+start_at: step_1
+tasks:
+  step_1:
+    # output_format can pull specific elements out of a json response, dotted notation works too
+    type: remote_uri_call
+    uri: http://jsonplaceholder.typicode.com/posts
+    operation: POST
+    payload: "{ 'userId': 99, 'id': 999, 'title': 'This is a test title', 'body': 'This is a test body' }"
+    output_type: json
+    output_format: {"post_id":"id"}
+    on_success: step_2
+    on_failure: step_5
+  step_2:
+    # wait times are always in seconds
+    type: wait
+    time_to_wait: 3
+    on_success: step_3
+  step_3:
+    # get HEAD and place output in raw_output element
+    type: remote_uri_call
+    uri: http://kieranbroadfoot.com
+    operation: HEAD
+    on_success: step_4
+  step_4:
+    # get HEAD and parse using regexes, grouping works but multiple groups will create element_X
+    type: remote_uri_call
+    uri: http://kieranbroadfoot.com
+    operation: HEAD
+    output_type: text
+    output_format: { "serverType": "Server: (.*)", "contentLength": "Content-Length:.*" }
+    on_success: step_5
+  step_5:
+    # use the example helper to show how new helpers can be created
+    type: example_helper
+    foo: bar
+    on_success: step_6
+  step_6:
+    # use a custom lambda function to respond to a step (NB: use example_helper to check for input/output)
+    type: custom
+    arn: arn:aws:lambda:REGION:ACCOUNT_ID:function:eunomia_example_helper
+    bar: baz
+    on_success: step_7 
+  step_7:
+    type: remote_uri_call
+    uri: http://jsonplaceholder.typicode.com/posts/1
+    operation: GET
+    output_type: json
+    output_format: {"theTitle": "title"}
+    on_success: step_8
+    on_failure: step_8
+  step_7:
+    type: end
