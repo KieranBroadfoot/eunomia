@@ -24,8 +24,9 @@ start_at: step_1
 tasks:
   step_1:
     type: remote_uri_call
-    uri: http://github.com/kieranbroadfoot
-    operation: GET
+    options:
+        uri: http://github.com/kieranbroadfoot
+        operation: GET
     on_success: step_2
   step_2:
     type: end
@@ -38,11 +39,12 @@ The remote_uri_call helper can take a number of other arguments to set the value
 ```
   step_1:
     type: remote_uri_call
-    uri: http://jsonplaceholder.typicode.com/posts
-    operation: POST
-    payload: "{ 'userId': 99, 'id': 999, 'title': 'This is a title', 'body': 'This is a body' }"
-    output_type: json
-    output_format: {"post_id":"id"}
+    options:
+        uri: http://jsonplaceholder.typicode.com/posts
+        operation: POST
+        payload: "{ 'userId': 99, 'id': 999, 'title': 'This is a title', 'body': 'This is a body' }"
+        output_type: json
+        output_format: {"post_id":"id"}
 ```
 
 or:
@@ -50,14 +52,26 @@ or:
 ```
   step_4:
     # get HEAD and parse using regexes, grouping works but multiple groups will create element_X
-    type: remote_uri_call
-    uri: http://kieranbroadfoot.com
-    operation: HEAD
-    output_type: text
-    output_format: { "serverType": "Server: (.*)", "contentLength": "Content-Length:.*" }
+    type: remote_uri_call\
+    options:
+        uri: http://kieranbroadfoot.com
+        operation: HEAD
+        output_type: text
+        output_format: { "serverType": "Server: (.*)", "contentLength": "Content-Length:.*" }
 ```
 
 If no output_format is included then the full result of call is included into a raw_output element in the batch output
+
+## Execution
+
+The "execute" element of the definition uses the standard CloudWatch Events schedule format.  Examples include:
+
+```
+cron(0 20 * * ? *) // every day at 8pm
+rate(5 minutes)
+```
+
+Further details of formats can be found [here](http://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html)
 
 ## Setup
 
