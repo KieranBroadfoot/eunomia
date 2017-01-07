@@ -397,7 +397,7 @@ def check_validity_of_data(data, list_of_task_types):
             return generate_parse_error(task+" has a type containing spaces")
         if content["type"] not in list_of_task_types:
             return generate_parse_error(task+" has invalid type")
-        if content["type"] == "custom" and "arn" not in content:
+        if content["type"] == "custom" and "arn" not in content["options"]:
             return generate_parse_error(task+" has custom type but no associated arn")
         if "output_type" in content and not "output_format" in content:
             return generate_parse_error(task+" has no associated output_format")
@@ -413,12 +413,12 @@ def check_validity_of_data(data, list_of_task_types):
         if "on_success" not in content and content['type'] != "end":
             return generate_parse_error(task+" has no on_success task")
         if content["type"] == "wait":
-            if "time_to_wait" not in content:
+            if "time_to_wait" not in content["options"]:
                 return generate_parse_error(task+" missing a time_to_wait value")
         if content["type"] == "remote_uri_call":
-            if "uri" not in content or "operation" not in content:
+            if "uri" not in content["options"] or "operation" not in content["options"]:
                 return generate_parse_error(task+" has no uri or operation set")
-            if content["operation"] not in ["GET", "POST", "HEAD"]:
+            if content["options"]["operation"] not in ["GET", "POST", "HEAD"]:
                 return generate_parse_error(task+" has invalid operation type")
     return True     
 
@@ -431,7 +431,7 @@ def generate_sfn(config, state_machine, task_name, task):
         return generate_task(config, state_machine, task_name, task)
 
 def generate_wait_sfn(config, state_machine, task_name, task):
-    state_machine["States"][task_name] = { "Type": "Wait", "Seconds": task["time_to_wait"], "Next": task["on_success"] }
+    state_machine["States"][task_name] = { "Type": "Wait", "Seconds": task["options"]["time_to_wait"], "Next": task["on_success"] }
     return state_machine
 
 def generate_end_sfn(config, state_machine, task_name, task):
@@ -456,7 +456,7 @@ def generate_task(config, state_machine, task_name, task):
     }
     arn = "arn:aws:lambda:"+config["region"]+":"+config["accountid"]+":function:eunomia_"+task["type"]
     if task["type"] == "custom":
-        arn = task["arn"]
+        arn = task["options"]["arn"]
     state_machine["States"][task_name+"_action"] = {
         "Type": "Task",
         "Resource": arn,
@@ -475,19 +475,19 @@ def generate_task(config, state_machine, task_name, task):
 
 def update_input_data_set(input_set, task_name, task):
     if task["type"] == "remote_uri_call":
-        input_set["input"][task_name] = {'uri': task["uri"], 'operation': task["operation"]}
+        input_set["input"][task_name] = {'uri': task["options"]["uri"], 'operation': task["options"]["operation"]}
         input_set["output"][task_name] = {}
-        if "payload" in task:
-            input_set["input"][task_name]["payload"] = task["payload"]
-        if "output_type" in task and "output_format" in task:
-            input_set["input"][task_name]["output_type"] = task["output_type"]
-            input_set["input"][task_name]["output_format"] = task["output_format"]
+        if "payload" in task["options"]:
+            input_set["input"][task_name]["payload"] = task["options"]["payload"]
+        if "output_type" in task["options"] and "output_format" in task["options"]:
+            input_set["input"][task_name]["output_type"] = task["options"]["output_type"]
+            input_set["input"][task_name]["output_format"] = task["options"]["output_format"]
     elif task["type"] not in ["wait", "end"]:
         input_set["input"][task_name] = {}
         input_set["output"][task_name] = {}
-        for key in task:
+        for key in task["options"]:
             if key not in ["type", "arn", "on_success", "on_failure"]:
-                input_set["input"][task_name][key] = task[key]
+                input_set["input"][task_name][key] = task["options"][key]
     return input_set
     
 if __name__ == '__main__':
