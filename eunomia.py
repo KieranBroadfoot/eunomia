@@ -74,12 +74,12 @@ def list_state_machines(config):
     s3 = boto3.client('s3')
     try:
         for key in s3.list_objects(Bucket="eunomia-"+config["accountid"])['Contents']:
-            if key['Key'] == "triggers.json":
+            if "batch" not in key['Key']:
                 continue
             path = key['Key'].split("/")
-            name = path[0]+" ("+path[1]+")"
-            task_id = path[0]+"_"+path[1]
-            path_id = path[0]+"/"+path[1]
+            name = path[1]+" ("+path[2]+")"
+            task_id = path[1]+"_"+path[2]
+            path_id = path[1]+"/"+path[2]
             if [name,task_id,path_id] not in available_tasks:
                 available_tasks.append([name,task_id,path_id])  
     except KeyError:
@@ -249,6 +249,7 @@ def delete_state_machine(config, args):
                     if triggers[key][index]["batch_name"] == task_id:
                         del triggers[key][index]
             s3.put_object(Bucket="eunomia-"+config["accountid"], Key="triggers.json",Body=json.dumps(triggers))
+            print "Deleted Trigger"
         except botocore.exceptions.ClientError:
             print "No Rule or Trigger found for Batch!"
             pass
