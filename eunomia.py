@@ -118,7 +118,7 @@ def generate_state_machine(config, args):
                 version = "v"+str(data["version"])
                 sfn_name = "eunomia_"+short_name+"_"+version
                 input_set["batch_name"] = sfn_name
-                s3_path = short_name+"/"+version
+                s3_path = "batch/"+short_name+"/"+version
                 s3.Bucket("eunomia-"+config["accountid"]).put_object(Key=s3_path+"/state_machine.json",Body=json.dumps(state_machine))
                 s3.Bucket("eunomia-"+config["accountid"]).put_object(Key=s3_path+"/input_set.json",Body=json.dumps(input_set))
                 response = sfn.create_state_machine(
@@ -189,7 +189,7 @@ def generate_state_machine(config, args):
 def execute_state_machine(config, args):
     sfn = boto3.client('stepfunctions', region_name=config["region"])
     task_id = args.name+"_"+args.version
-    path_id = args.name+"/"+args.version
+    path_id = "batch/"+args.name+"/"+args.version
     read_s3 = boto3.resource('s3')
     try:
         obj = read_s3.Object("eunomia-"+config["accountid"], path_id+"/input_set.json")
@@ -222,7 +222,7 @@ def delete_state_machine(config, args):
     sfn = boto3.client('stepfunctions', region_name=config["region"])
     events = boto3.client('events', region_name=config["region"])
     task_id = args.name+"_"+args.version
-    path_id = args.name+"/"+args.version
+    path_id = "batch/"+args.name+"/"+args.version
     s3.delete_object(Bucket="eunomia-"+config["accountid"], Key=path_id+"/input_set.json")
     print "Deleted Input Set."
     s3.delete_object(Bucket="eunomia-"+config["accountid"], Key=path_id+"/state_machine.json")
@@ -238,7 +238,7 @@ def delete_state_machine(config, args):
         response = events.delete_rule(
             Name="eunomia_rule_"+task_id
         )
-        print "Deleted schedule"
+        print "Deleted Schedule"
     except botocore.exceptions.ClientError:
         # rule doesnt exist.... check for batch trigger
         try:
