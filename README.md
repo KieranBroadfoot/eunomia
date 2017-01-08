@@ -64,14 +64,15 @@ If no output_format is included then the full result of call is included into a 
 
 ## Execution
 
-The "execute" element of the definition uses the standard CloudWatch Events schedule format.  Examples include:
+The "execute" element of the definition can either define a linked batch job or utilise the standard CloudWatch Events schedule format.  Examples include:
 
 ```
+batch(Daily Batch 1) // execute Daily_Batch v1 on completion
 cron(0 20 * * ? *) // every day at 8pm
 rate(5 minutes)
 ```
 
-Further details of formats can be found [here](http://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html)
+Further details of CloudWatch schedule formats can be found [here](http://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html)
 
 ## Setup
 

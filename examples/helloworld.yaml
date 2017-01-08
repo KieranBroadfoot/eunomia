@@ -6,8 +6,8 @@ tasks:
   step_1:
     type: remote_uri_call
     options:
-        uri: http://github.com/kieranbroadfoot
-        operation: GET
+        uri: http://kieranbroadfoot.com
+        operation: HEAD
     on_success: step_2
   step_2:
     type: end
