@@ -8,7 +8,7 @@ Eunomia is a simple tool to define batch jobs and run them within AWS.
 
 Eunomia utilises Step Functions, Lambda, S3, SNS, IAM, and CloudWatch Events to take a single yaml file and convert it into an autonomous batch job.  At the present time the set of helpers available for your batch definition is limited but easily extended by using the example_helper as a template.  You can also reference entirely distinct lambda functions if the input/outputs match the expected form.
 
-It is presumed that in the majority of cases your batch job would be triggering distinct webservices hence the primary inclusion of the remote_uri_call function.
+It is presumed that in the majority of cases your batch job would be triggering distinct webservices hence the primary inclusion of the remote_uri_call function.  However, ssh support is also available for traditional connectivity.
 
 The resulting output JSON from the batch is sent to a default SNS topic in your chosen region and hence downstream subscriptions can be formed as needed.
 
@@ -74,11 +74,35 @@ rate(5 minutes)
 
 Further details of CloudWatch schedule formats can be found [here](http://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html)
 
+## SSH Support
+
+Support for SSH requires the creation of secrets.  Whilst you may also create multiple types of secrets the primary goal is to store ssh private keys in the eunomia system.  These are envelope wrapped using KMS and stored in S3.  They can only be decrypted if a user has access to both the S3 bucket and KMS IAM permissions.
+
+```
+eunomia secrets add name_of_key -f /path/to/private_ssh_key
+
+```
+
+Once stored in Eunomia the format for a remote SSH call is as follows:
+
+```
+  step_1:
+    type: remote_ssh_call
+    options:
+        user: ec2-user
+        host: 10.10.10.10
+        command: cat /etc/hosts
+        secret: name_of_key
+        output_type: text
+        output_format: { "local": "10.*" }
+```
+
 ## Setup
 
 0. Install any dependencies in your local python installation (boto3)
 1. Ensure your ~/.aws directory is setup with appropriate credentials (eunomia needs admin priv to setup)
 2. Within the directory where the "helpers" directory is run: eunomia.py setup all
+3. Lambda function creation must be undertaken on a Linux device due to the need for compiled components
 
 It should be noted that additional regions can be configured by calling: "eunomia.py setup region"
 
@@ -93,11 +117,13 @@ positional arguments:
                         Try commands like "eunomia generate -h" or
                         "eunomia execute --help" to get each sub
                         command's options
-    list                list available batch definitions
+    list                list available configurations
     generate            generate a batch definition
     execute             manually execute a batch definition
     delete              delete a batch definition
     setup               setup the Eunomia batch service
+    secret              configure secrets for Eunomia batch service
+
 
 optional arguments:
   -h, --help            show this help message and exit
