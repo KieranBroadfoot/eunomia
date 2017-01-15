@@ -22,7 +22,8 @@ def get_parser():
     parsers['super'] = argparse.ArgumentParser(description="A simple batch scheduler")
     parsers['super'].add_argument("-r", "--region", help="the AWS region to use")
     subparsers = parsers['super'].add_subparsers(help='Try commands like "{name} generate -h" or "{name} execute --help" to get each sub command\'s options'.format(name=sys.argv[0]))
-    parsers['list'] = subparsers.add_parser('list', help='list available batch definitions')
+    parsers['list'] = subparsers.add_parser('list', help='list available configurations')
+    parsers['list'].add_argument("type", type=str, help="view: batch, secrets")
     parsers['list'].set_defaults(action='list')
     parsers['generate'] = subparsers.add_parser('generate', help='generate a batch definition')
     parsers['generate'].add_argument("file", type=str, help="yaml batch definition")
@@ -52,7 +53,7 @@ def main():
     print "Eunomia: { 'AccountID': '"+config["accountid"]+"', 'Region': '"+config["region"]+"' }"
     if "action" in vars(args):
         if args.action == "list":
-            list_state_machines(config)
+            list_configuration(config, args)
             return
         if args.action == "generate":
             generate_state_machine(config, args)
