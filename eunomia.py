@@ -16,6 +16,8 @@ import glob
 import tempfile
 import shutil
 import zipfile
+import base64
+from Crypto.Cipher import AES
 
 def get_parser():
     parsers = {}
@@ -39,6 +41,12 @@ def get_parser():
     parsers['setup'] = subparsers.add_parser('setup', help='setup the Eunomia batch service')
     parsers['setup'].add_argument("type", type=str, help="type of setup: all, global, region, update_lambda")
     parsers['setup'].set_defaults(action='setup')
+    parsers['secret'] = subparsers.add_parser('secret', help='configure secrets for Eunomia batch service')
+    parsers['secret'].add_argument("type", type=str, help="actions: add, delete")
+    parsers['secret'].add_argument("name", type=str, help="name of secret")
+    parsers['secret'].add_argument("-f", "--filename", help="file containing the secret")
+    parsers['secret'].add_argument("-t", "--text", help="text containing the secret")
+    parsers['secret'].set_defaults(action='secret')
     return parsers
 
 def main():
@@ -67,32 +75,38 @@ def main():
         if args.action == "setup":
             setup(config, args)
             return
+        if args.action == "secret":
+            secret(config, args)
+            return
     else:
         parsers['super'].print_help()
 
-def list_state_machines(config):
-    available_tasks = []
+def list_configuration(config, args):
+    filter = "batch"
+    if args.type == "secrets":
+        filter = "secrets"
+    configuration_items = []
     s3 = boto3.client('s3')
     try:
         for key in s3.list_objects(Bucket="eunomia-"+config["accountid"])['Contents']:
-            if "batch" not in key['Key']:
+            if filter not in key['Key'] or "/." in key['Key']:
                 continue
             path = key['Key'].split("/")
-            name = path[1]+" ("+path[2]+")"
-            task_id = path[1]+"_"+path[2]
-            path_id = path[1]+"/"+path[2]
-            if [name,task_id,path_id] not in available_tasks:
-                available_tasks.append([name,task_id,path_id])  
+            if filter == "batch":
+                name = path[1]+" ("+path[2]+")"
+            else:
+                name = path[1]
+            if name not in configuration_items:
+                configuration_items.append(name)
     except KeyError:
-        print "Empty Bucket: No Tasks Available" 
+        print "Empty Bucket: No Configuration Available"
         sys.exit(1)
 
-    print "Available Tasks:"
+    print "Available:"
     count = 0
-    for task in available_tasks:
-        print str(count)+": "+task[0]
+    for task in configuration_items:
+        print str(count)+": "+task
         count += 1
-    return available_tasks
 
 def generate_state_machine(config, args):
     sfn = boto3.client('stepfunctions', region_name=config["region"])
@@ -436,6 +450,48 @@ def generate_list_of_lambda_functions(config):
         if "eunomia_" in func["FunctionName"]:
             functions.append(func["FunctionName"])
     return functions
+
+def secret(config, args):
+    if args.type == "add":
+        add_secret(config, args)
+    elif args.type == "delete":
+        delete_secret(config, args)
+
+def add_secret(config, args):
+    kms = boto3.client('kms')
+    s3 = boto3.resource('s3')
+    pad = lambda s: s + (32 - len(s) % 32) * ' '
+    if not args.filename and not args.text:
+        print "Error: must pass an -f or -t options"
+        sys.exit(1)
+    if args.filename and args.text:
+        print "Error: must choose to pass an -f or -t option, but not both"
+        sys.exit(1)
+    if args.filename:
+        try:
+            content = open(args.filename, 'r').read()
+        except IOError:
+            print "No such file: "+args.filename
+            sys.exit(1)
+    else:
+        content = args.text
+    data_key = kms.generate_data_key(
+        KeyId="alias/eunomia/secrets",
+        KeySpec='AES_256'
+    )
+    ciphertext_blob = data_key.get('CiphertextBlob')
+    plaintext_key = data_key.get('Plaintext')
+    crypter = AES.new(plaintext_key, 1)
+    encrypted_data = base64.b64encode(crypter.encrypt(pad(content)))
+    s3.Bucket("eunomia-"+config["accountid"]).put_object(Key="secrets/"+args.name+"/secret.blob",Body=encrypted_data)
+    s3.Bucket("eunomia-"+config["accountid"]).put_object(Key="secrets/"+args.name+"/envelope.key",Body=ciphertext_blob)
+    print "Secret successfully saved"
+
+def delete_secret(config, args):
+    s3 = boto3.client('s3')
+    s3.delete_object(Bucket="eunomia-"+config["accountid"], Key="secrets/"+args.name+"/secret.blob")
+    s3.delete_object(Bucket="eunomia-"+config["accountid"], Key="secrets/"+args.name+"/envelope.key")
+    print "Secret successfully deleted"
 
 def generate_parse_error(text):
     print "Parse Error: "+text
