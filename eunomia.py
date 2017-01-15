@@ -359,13 +359,18 @@ def setup_lambda(config):
         sys.exit(1)
     pathname = os.path.dirname(sys.argv[0])
     for file in glob.glob(os.path.abspath(pathname)+"/helpers/*"):
+        if "eunomia_core" in file:
+            continue
+        dir_name = os.path.dirname(file)
         fn_name = os.path.basename(file)
         fn_name = fn_name.replace(".py","")
         list_of_functions = generate_list_of_lambda_functions(config)
         tmppath = tempfile.mkdtemp()
         shutil.copyfile(file, tmppath+"/lambda.py")
+        shutil.copyfile(dir_name+"/eunomia_core.py", tmppath+"/eunomia_core.py")
         zip_file = zipfile.ZipFile(tmppath+"/lambda.zip", 'w', zipfile.ZIP_DEFLATED)
         zip_file.write(tmppath+"/lambda.py", "lambda.py")
+        zip_file.write(tmppath+"/eunomia_core.py", "eunomia_core.py")
         zip_file.close()
         with open(tmppath+"/lambda.zip", 'rb') as zipf:
             if fn_name in list_of_functions:
