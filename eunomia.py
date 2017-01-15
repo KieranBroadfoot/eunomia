@@ -17,6 +17,8 @@ import tempfile
 import shutil
 import zipfile
 import base64
+import subprocess
+import platform
 from Crypto.Cipher import AES
 
 def get_parser():
@@ -362,6 +364,10 @@ def setup_region(config):
     setup_lambda(config)
     
 def setup_lambda(config):
+    if platform.system() != "Linux":
+        print "Lambda setup must take place on a Linux device"
+        print "Ensure you have installed: gcc libffi-devel python-devel openssl-devel"
+        return
     lambda_client = boto3.client('lambda', region_name=config["region"])
     iam = boto3.client('iam')
     role_arn = ""
@@ -373,21 +379,32 @@ def setup_lambda(config):
         print "No valid eunomia role in this region for lambda execution: did you run setup region?"
         sys.exit(1)
     pathname = os.path.dirname(sys.argv[0])
+    tmppath = tempfile.mkdtemp()
+    subprocess.call(["virtualenv","-p",sys.executable,tmppath])
+    activation = tmppath+"/bin/activate_this.py"
+    execfile(activation, dict(__file__=activation))
+    sys_path = sys.path[0].replace(tmppath+"/lib","")
+    subprocess.call(["pip","install","-r", os.path.abspath(pathname)+"/helpers/requirements.txt"])
+    list_of_functions = generate_list_of_lambda_functions(config)
+
     for file in glob.glob(os.path.abspath(pathname)+"/helpers/*"):
-        if "eunomia_core" in file:
+        if "eunomia_core.py" in file or "requirements.txt" in file:
             continue
         dir_name = os.path.dirname(file)
         fn_name = os.path.basename(file)
         fn_name = fn_name.replace(".py","")
-        list_of_functions = generate_list_of_lambda_functions(config)
-        tmppath = tempfile.mkdtemp()
         shutil.copyfile(file, tmppath+"/lambda.py")
         shutil.copyfile(dir_name+"/eunomia_core.py", tmppath+"/eunomia_core.py")
         zip_file = zipfile.ZipFile(tmppath+"/lambda.zip", 'w', zipfile.ZIP_DEFLATED)
         zip_file.write(tmppath+"/lambda.py", "lambda.py")
         zip_file.write(tmppath+"/eunomia_core.py", "eunomia_core.py")
+        for root, dirs, files in os.walk(tmppath+"/lib"+sys_path):
+            for file in files:
+                zip_root = root.replace(tmppath+"/lib"+sys_path,"")
+                zip_file.write(os.path.join(root, file),os.path.join(zip_root, file))
         zip_file.close()
         with open(tmppath+"/lambda.zip", 'rb') as zipf:
+            print "Uploading lambda.zip for "+fn_name+"..."
             if fn_name in list_of_functions:
                 upload = lambda_client.update_function_code(
                     FunctionName=fn_name,
@@ -438,7 +455,7 @@ def setup_lambda(config):
                                 Endpoint=upload["FunctionArn"]
                             )
                             print "Lambda Function ("+fn_name+") subscribed to: "+topic["TopicArn"]
-        shutil.rmtree(tmppath)
+    shutil.rmtree(tmppath)
 
 def generate_list_of_lambda_functions(config):
     functions = []
@@ -498,6 +515,7 @@ def generate_parse_error(text):
     return False
 
 def check_validity_of_data(data, list_of_task_types):
+    print list_of_task_types
     if "name" not in data:
         return generate_parse_error("No name defined")
     if "version" not in data:
@@ -543,6 +561,9 @@ def check_validity_of_data(data, list_of_task_types):
                 return generate_parse_error(task+" has no uri or operation set")
             if content["options"]["operation"] not in ["GET", "POST", "HEAD"]:
                 return generate_parse_error(task+" has invalid operation type")
+        if content["type"] == "remote_ssh_call":
+            if "user" not in content["options"] or "host" not in content["options"] or "secret" not in content["options"] or "command" not in content["options"]:
+                return generate_parse_error(task+" is missing user, host, secret, or command")
     return True     
 
 def generate_sfn(config, state_machine, task_name, task):

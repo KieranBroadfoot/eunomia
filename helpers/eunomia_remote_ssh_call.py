@@ -6,37 +6,39 @@ import StringIO
 from Crypto.Cipher import AES
 import json
 
-input = '{"batch_name": "eunomia_Test_SSH_v1", "input": {"step_1": {"output_format": {"local": "(10.*)"}, "secret": "my_secret", "host": "brujah.local.", "command": "cat /etc/hosts", "user": "kieran", "output_type": "text"}}, "output": {"step_1": {}}, "current_step":{"step":"step_1"}}'
-event = json.loads(input)
+kms = boto3.client('kms')
+read_s3 = boto3.resource('s3')
 
 def lambda_handler(event, context):
     core = EunomiaCore(event)
     step = core.get_step()
 
-    kms = boto3.client('kms')
-    read_s3 = boto3.resource('s3')
+    account_id = core.get_account_id()
+    data = read_s3.Object("eunomia-"+account_id, "secrets/"+step["secret"]+"/secret.blob")
+    key = read_s3.Object("eunomia-"+account_id, "secrets/"+step["secret"]+"/envelope.key")
 
-    config = {}
-    config["accountid"] = boto3.client('sts').get_caller_identity().get('Account')
-    session = boto3.session.Session()
-    config["region"] = session.region_name
-
-    data = read_s3.Object("eunomia-"+config["accountid"], "secrets/name_of_secret/secret.blob")
-    key = read_s3.Object("eunomia-"+config["accountid"], "secrets/name_of_secret/envelope.key")
-
-    decrypted_key = kms.decrypt(CiphertextBlob=key.get()['Body'].read()).get('Plaintext')
+    try:
+        decrypted_key = kms.decrypt(CiphertextBlob=key.get()['Body'].read()).get('Plaintext')
+    except Exception as e:
+        raise TaskException("No Secret: "+str(e.args[0]),core)
     crypter = AES.new(decrypted_key, 1)
 
     unwrapped_ssh_key = crypter.decrypt(base64.b64decode(data.get()['Body'].read())).rstrip()
     output = StringIO.StringIO(unwrapped_ssh_key)
 
-    k = paramiko.RSAKey.from_private_key(output)
-    c = paramiko.SSHClient()
-    c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    try:
+        ssh_private_key = paramiko.RSAKey.from_private_key(output)
+    except Exception as e:
+        raise TaskException("Issue with SSH Key: "+str(e.args[0]),core)
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-    c.connect( hostname = step["host"], username = step["user"], pkey = k )
+    try:
+        client.connect( hostname = step["host"], username = step["user"], pkey = ssh_private_key )
+    except Exception as e:
+        raise TaskException("SSH Connection Error: "+str(e.args[0]),core)
 
-    stdin, stdout, stderr = c.exec_command(step["command"])
+    stdin, stdout, stderr = client.exec_command(step["command"])
     output = stderr.read()
     if not output:
         output = stdout.read()
@@ -47,6 +49,3 @@ def lambda_handler(event, context):
 
     print json.dumps(core.get_event())
     return core.get_event()
-
-if __name__ == '__main__':
-    lambda_handler(event, "")

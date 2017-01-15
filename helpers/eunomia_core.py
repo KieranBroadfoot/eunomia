@@ -20,6 +20,12 @@ class EunomiaCore:
     def get_start_timestamp(self):
         return self._begin_step
 
+    def get_account_id(self):
+        return self._event["account_id"]
+
+    def set_output_kv(self, key, value):
+        self._event["output"][key] = value
+
     def get_event(self):
         self._step["begin_step"] = self._begin_step
         self._step["end_step"] = str(datetime.datetime.utcnow())

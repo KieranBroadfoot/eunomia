@@ -4,7 +4,7 @@ execute: "rate(10 hours)"
 start_at: step_1
 tasks:
   step_1:
-    type: remote_ssh
+    type: remote_ssh_call
     options:
         user: kieran
         host: brujah.local.

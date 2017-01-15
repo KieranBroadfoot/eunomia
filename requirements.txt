@@ -1,0 +1,5 @@
+boto3>=1.4.3
+botocore>=1.4.91
+pycrypto>=2.6.1
+PyYAML>=3.11
+virtualenv>=15.1.0
