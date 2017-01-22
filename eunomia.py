@@ -515,7 +515,6 @@ def generate_parse_error(text):
     return False
 
 def check_validity_of_data(data, list_of_task_types):
-    print list_of_task_types
     if "name" not in data:
         return generate_parse_error("No name defined")
     if "version" not in data:
