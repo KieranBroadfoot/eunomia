@@ -202,7 +202,7 @@ def generate_state_machine(config, args):
                     print "Generated Schedule at: "+rule_arn
         except yaml.YAMLError as exc:
             print(exc)
-            
+
 def execute_state_machine(config, args):
     sfn = boto3.client('stepfunctions', region_name=config["region"])
     task_id = args.name+"_"+args.version
@@ -225,7 +225,7 @@ def execute_state_machine(config, args):
             sfn_arn = key["stateMachineArn"]
     if not sfn_arn:
         print "No valid State Machine available."
-        sys.exit(1) 
+        sys.exit(1)
     else:
         exec_sfn = sfn.start_execution(
             stateMachineArn=sfn_arn,
@@ -280,13 +280,13 @@ def delete_state_machine(config, args):
 
     if not sfn_arn:
         print "No valid State Machine available."
-        sys.exit(1) 
+        sys.exit(1)
     else:
         response = sfn.delete_state_machine(
             stateMachineArn=sfn_arn
         )
         print "Deleted State Machine."
-        
+
 def setup(config, args):
     if args.type == "all":
         setup_global(config)
@@ -297,23 +297,23 @@ def setup(config, args):
         setup_region(config)
     elif args.type == "update_lambda":
         setup_lambda(config)
-    
+
 def setup_global(config):
     iam = boto3.client('iam')
     s3 = boto3.client('s3', region_name=config["region"])
-    policy = { "Version": "2012-10-17", 
-        "Statement": [ 
+    policy = { "Version": "2012-10-17",
+        "Statement": [
             { "Action": [ "sns:Publish", "sns:ListTopics" ], "Effect": "Allow", "Resource": "arn:aws:sns:*:"+config["accountid"]+":*" },
             { "Action": [ "lambda:InvokeFunction","lambda:InvokeAsync" ], "Effect": "Allow", "Resource": "arn:aws:lambda:*:"+config["accountid"]+":function:eunomia_*" },
             { "Action": [ "states:StartExecution" ], "Effect": "Allow", "Resource": "arn:aws:states:*:"+config["accountid"]+":stateMachine:eunomia_*" },
             { "Action": [ "s3:GetObject" ], "Effect": "Allow", "Resource": "arn:aws:s3:::eunomia-*" }
-        ]  
+        ]
     }
     response = s3.create_bucket(
         ACL='private',
-        Bucket="eunomia-"+accountid,
+        Bucket="eunomia-"+config["accountid"],
         CreateBucketConfiguration={
-            'LocationConstraint': region
+            'LocationConstraint': config["region"]
         }
     )
     print "S3 Bucket created at: "+response["Location"]
@@ -362,7 +362,7 @@ def setup_region(config):
     print "Waiting 10 seconds for role to complete sync..."
     time.sleep(10)
     setup_lambda(config)
-    
+
 def setup_lambda(config):
     if platform.system() != "Linux":
         print "Lambda setup must take place on a Linux device"
@@ -547,9 +547,9 @@ def check_validity_of_data(data, list_of_task_types):
             return generate_parse_error(task+" has invalid format type")
         if "on_success" in content:
             if content["on_success"] not in data["tasks"]:
-                return generate_parse_error(task+" success maps to non-existent task") 
+                return generate_parse_error(task+" success maps to non-existent task")
         if "on_failure" in content and content["on_failure"] not in data["tasks"]:
-            return generate_parse_error(task+" failure state maps to non-existent task") 
+            return generate_parse_error(task+" failure state maps to non-existent task")
         if "on_success" not in content and content['type'] != "end":
             return generate_parse_error(task+" has no on_success task")
         if content["type"] == "wait":
@@ -563,7 +563,7 @@ def check_validity_of_data(data, list_of_task_types):
         if content["type"] == "remote_ssh_call":
             if "user" not in content["options"] or "host" not in content["options"] or "secret" not in content["options"] or "command" not in content["options"]:
                 return generate_parse_error(task+" is missing user, host, secret, or command")
-    return True     
+    return True
 
 def generate_sfn(config, state_machine, task_name, task):
     if task["type"] == "wait":
@@ -585,7 +585,7 @@ def generate_end_sfn(config, state_machine, task_name, task):
         "ResultPath": "$",
         "OutputPath": "$",
         "End": True
-    }   
+    }
     return state_machine
 
 def generate_task(config, state_machine, task_name, task):
@@ -607,12 +607,12 @@ def generate_task(config, state_machine, task_name, task):
         "ResultPath": "$",
         "OutputPath": "$",
         "Next": task["on_success"]
-    }   
+    }
     if "on_failure" in task:
         state_machine["States"][task_name+"_action"]["Catch"] = [{
             "ErrorEquals": [ "States.ALL" ],
             "ResultPath": "$.output."+task_name,
-            "Next": task["on_failure"]  
+            "Next": task["on_failure"]
         }]
     return state_machine
 
@@ -632,6 +632,6 @@ def update_input_data_set(input_set, task_name, task):
             if key not in ["type", "arn", "on_success", "on_failure"]:
                 input_set["input"][task_name][key] = task["options"][key]
     return input_set
-    
+
 if __name__ == '__main__':
     main()

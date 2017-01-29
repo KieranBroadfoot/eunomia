@@ -8,7 +8,6 @@ def lambda_handler(event, context):
     core = EunomiaCore(event)
     step = core.get_step()
     output = ""
-    error_msg = ""
     req = urllib2.Request(step["uri"], headers={"User-Agent": "Eunomia"})
     try:
         if step["operation"] == "GET":

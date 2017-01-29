@@ -7,15 +7,14 @@ from Crypto.Cipher import AES
 import json
 
 kms = boto3.client('kms')
-read_s3 = boto3.resource('s3')
 
 def lambda_handler(event, context):
     core = EunomiaCore(event)
     step = core.get_step()
 
     account_id = core.get_account_id()
-    data = read_s3.Object("eunomia-"+account_id, "secrets/"+step["secret"]+"/secret.blob")
-    key = read_s3.Object("eunomia-"+account_id, "secrets/"+step["secret"]+"/envelope.key")
+    data = helper_get_s3_object(account_id=account_id, path="secrets/"+step["secret"]+"/secret.blob")
+    key = helper_get_s3_object(account_id=account_id, path="secrets/"+step["secret"]+"/envelope.key")
 
     try:
         decrypted_key = kms.decrypt(CiphertextBlob=key.get()['Body'].read()).get('Plaintext')

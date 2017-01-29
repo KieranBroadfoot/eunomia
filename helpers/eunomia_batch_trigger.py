@@ -1,34 +1,24 @@
+from eunomia_core import *
 import boto3
-import botocore
 import json
-import time
-import datetime
 
-sfn = boto3.client('stepfunctions')
+# this function is utilised to monitor for SNS messages from Eunomia to determine if downstream
+# batches should be executed.
+
 read_s3 = boto3.resource('s3')
 
 def lambda_handler(event, context):
+    executing_arns = []
     for record in event["Records"]:
-        message = record["Sns"]["Message"]
-        input = json.loads(message)
-        trigger_file = read_s3.Object("eunomia-"+input["account_id"], "triggers.json")
-        triggers = json.loads(trigger_file.get()['Body'].read().decode('utf-8'))
-        executing_arns = []
+        input = json.loads(record["Sns"]["Message"])
+        triggers = helper_get_s3_object_as_json(account_id=input["account_id"], path="triggers.json")
         for batch in triggers:
             if batch == input["batch_name"]:
                 # found a matching trigger, iterate and execute
                 for executing_batch in triggers[batch]:
-                    try:
-                        obj = read_s3.Object("eunomia-"+input["account_id"], executing_batch["batch_path"]+"/input_set.json")
-                        input_set = json.loads(obj.get()['Body'].read().decode('utf-8'))
-                        input_set["batch_begin"] = str(datetime.datetime.utcnow())
-                        input_set["account_id"] = event["account_id"]
-                    except botocore.exceptions.ClientError:
-                        raise Exception("No input set for batch")
-                    exec_sfn = sfn.start_execution(
-                        stateMachineArn=executing_batch["batch"],
-                        name="eunomia_"+executing_batch["batch_name"]+"_"+str(time.time()),
-                        input=json.dumps(input_set)
-                    )
-                    executing_arns.append(exec_sfn["executionArn"])
+                    batch = EunomiaBatch(account_id=input["account_id"],
+                                         batch_name=executing_batch["batch_name"],
+                                         batch_path=executing_batch["batch_path"],
+                                         arn=executing_batch["batch"])
+                    executing_arns.append(batch.execute_batch())
     return executing_arns

@@ -1,7 +1,18 @@
-import datetime
-import json
 import re
 import cgi
+import boto3
+import botocore
+import json
+import time
+import datetime
+
+def helper_get_s3_object(account_id=None, path=None):
+    read_s3 = boto3.resource('s3')
+    return read_s3.Object("eunomia-"+account_id, path)
+
+def helper_get_s3_object_as_json(account_id=None, path=None):
+    file = helper_get_s3_object(account_id=account_id, path=path)
+    return json.loads(file.get()['Body'].read().decode('utf-8'))
 
 class EunomiaCore:
 
@@ -24,7 +35,7 @@ class EunomiaCore:
         return self._event["account_id"]
 
     def set_output_kv(self, key, value):
-        self._event["output"][key] = value
+        self._output[key] = value
 
     def get_event(self):
         self._step["begin_step"] = self._begin_step
@@ -74,6 +85,29 @@ class EunomiaCore:
                         raise TaskException("Output does not contain key: "+key,self)
         if "output_type" not in self._step:
             self._step["raw_output"] = cgi.escape(output)
+
+class EunomiaBatch:
+    def __init__(self, account_id=None, batch_name=None, batch_path=None, arn=None):
+        self._account_id = account_id
+        self._batch_name = batch_name
+        self._batch_path = batch_path
+        self._arn = arn
+
+    def execute_batch(self):
+        sfn = boto3.client('stepfunctions')
+        read_s3 = boto3.resource('s3')
+        try:
+            input_set = helper_get_s3_object_as_json(account_id=self._account_id, path=self._batch_path+"/input_set.json")
+            input_set["batch_begin"] = str(datetime.datetime.utcnow())
+            input_set["account_id"] = self._account_id
+        except botocore.exceptions.ClientError:
+            raise Exception("No input set for batch")
+        exec_sfn = sfn.start_execution(
+            stateMachineArn=self._arn,
+            name="eunomia_"+self._batch_name+"_"+str(time.time()),
+            input=json.dumps(input_set)
+        )
+        return exec_sfn["executionArn"]
 
 class TaskException(Exception):
     def __init__(self, message, core_object):

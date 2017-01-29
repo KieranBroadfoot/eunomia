@@ -12,6 +12,12 @@ It is presumed that in the majority of cases your batch job would be triggering 
 
 The resulting output JSON from the batch is sent to a default SNS topic in your chosen region and hence downstream subscriptions can be formed as needed.
 
+## Supported Task Types
+
+* remote_uri_call (synchronously make a remote call over http)
+* remote_ssh_call (synchronously make a remote call over ssh)
+* start_batch (asynchronously execute another eunomia batch)
+
 ## Examples
 
 The simplest example of a batch definition is:
@@ -52,7 +58,7 @@ or:
 ```
   step_4:
     # get HEAD and parse using regexes, grouping works but multiple groups will create element_X
-    type: remote_uri_call\
+    type: remote_uri_call
     options:
         uri: http://kieranbroadfoot.com
         operation: HEAD
@@ -76,7 +82,7 @@ Further details of CloudWatch schedule formats can be found [here](http://docs.a
 
 ## SSH Support
 
-Support for SSH requires the creation of secrets.  Whilst you may also create multiple types of secrets the primary goal is to store ssh private keys in the eunomia system.  These are envelope wrapped using KMS and stored in S3.  They can only be decrypted if a user has access to both the S3 bucket and KMS IAM permissions.
+Support for SSH requires the creation of secrets.  Whilst you may also create multiple types of secrets the primary goal is to store ssh private keys in the eunomia system.  These are envelope wrapped using KMS and stored in S3.  They can only be decrypted if a user has access to both the S3 bucket and KMS IAM permissions.  Do not utilise ssh keys which are password protected.
 
 ```
 eunomia secrets add name_of_key -f /path/to/private_ssh_key
